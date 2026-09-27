@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import designStudioApi from './src/server/designStudioApi';
 import {
   generateLifestyleMockup,
   LifestyleMockupError,
@@ -19,6 +20,7 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '25mb' }));
+app.use('/design-api', designStudioApi);
 
 // Shared Gemini Client
 const getGeminiClient = () => {
