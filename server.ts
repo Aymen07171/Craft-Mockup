@@ -4,6 +4,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import {
+  generateLifestyleMockup,
+  LifestyleMockupError,
+  LifestyleMockupRequest,
+} from './src/server/lifestyleMockup';
 
 dotenv.config();
 
@@ -132,112 +137,15 @@ async function encodeImagePart(imageUrl: string) {
 // API: Generate AI Lifestyle Scene using Printify Reference Mockup & Preserved Artwork
 app.post('/api/generate-lifestyle-scene', async (req, res) => {
   try {
-    const {
-      designImageUrl,
-      productMockupUrl,
-      userScenePrompt,
-      modelName = 'iPhone 15 Pro',
-      brand = 'unspecified',
-      caseType = 'phone case shown in product reference',
-      dimensions,
-      cameraCutoutDesc,
-      variationIndex = 1,
-    } = req.body;
-
-    if (!designImageUrl) {
-      return res.status(400).json({ error: 'Design artwork image is required' });
-    }
-    if (!productMockupUrl) {
-      return res.status(400).json({ error: 'A product reference image is required to preserve the case appearance' });
-    }
-
-    const apiKey = process.env.POLLINATIONS_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({
-        error: 'Pollinations API key is missing. Set POLLINATIONS_API_KEY in your local .env file and restart the server.',
-      });
-    }
-
-    // Keep the source artwork and physical case reference as separate edit inputs.
-    const cameraDesc = cameraCutoutDesc || 'the exact camera opening visible in the product reference image';
-    const dimensionInfo = dimensions ? `${dimensions.pixelWidth}x${dimensions.pixelHeight}px (${dimensions.mmWidth}mm x ${dimensions.mmHeight}mm)` : 'follow the proportions visible in the product reference image';
-    const brandName = brand === 'apple' ? 'Apple iPhone' : brand === 'samsung' ? 'Samsung phone' : 'phone shown in the reference image';
-
-    const systemInstructions = `[CRITICAL PRODUCT & ARTWORK PRESERVATION INSTRUCTIONS]:
-  You are a commercial lifestyle product photographer creating a scene around a Printify phone case.
-  You are given two source images: the user's original artwork (Image 1) and the authoritative physical product reference (Image 2).
-
-PRIMARY MANDATES:
-1. PRESERVE THE USER'S ARTWORK EXACTLY:
-   - Do NOT redesign, regenerate, alter, re-color, add elements to, or replace the artwork.
-   - The artwork on the back of the case must be an exact, sharp, full-bleed print reproduction of the provided design.
-2. PRESERVE THE PHYSICAL PHONE CASE GEOMETRY:
-  - Device: ${modelName} (${brandName}).
-  - Case construction: ${caseType}. Follow the physical shape, material, finish, edges, buttons, and camera opening shown in Image 2; do not substitute another model or case style.
-  - Reference dimensions: ${dimensionInfo}.
-   - Camera module cutout: ${cameraDesc}.
-  - Preserve the proportions and cutouts shown in Image 2.
-3. THE BACK OF THE PHONE MUST BE PROMINENTLY VISIBLE:
-   - The phone must be positioned naturally in the person's hand, facing the camera so the back case art is clearly visible, sharp, and recognizable.
-   - Realistic hand anatomy: natural grip around the sides, authentic thumb/finger placement on the perimeter bumper without obscuring the artwork.
-4. LIFESTYLE ENVIRONMENT & CONTEXT:
-   - Scene: "${userScenePrompt || 'A person talking with a friend while casually holding their phone, with the back of the phone case facing the camera.'}"
-   - Style: Professional 35mm f/2.0 commercial lifestyle photography, cinematic natural lighting, realistic contact shadows, subtle reflections on the glossy/matte case surface, photorealistic depth of field.
-   - Variation: #${variationIndex}. Ensure unique natural pose and lighting nuance.
-
-OUTPUT: A single photorealistic photograph.`;
-
-    const response = await fetch('https://gen.pollinations.ai/v1/images/edits', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-image-2',
-        prompt: systemInstructions,
-        image: [{ image_url: designImageUrl }, { image_url: productMockupUrl }],
-        size: '1536x1024',
-        response_format: 'b64_json',
-      }),
-    });
-    const result = (await response.json().catch(() => null)) as {
-      data?: Array<{ b64_json?: string; media_type?: string; url?: string }>;
-      error?: string | { message?: string };
-    } | null;
-
-    if (!response.ok) {
-      const providerMessage =
-        typeof result?.error === 'string' ? result.error : result?.error?.message;
-      const errorMessage =
-        response.status === 402
-          ? 'Pollinations credits are exhausted. Check your available Quest Pollen balance.'
-          : response.status === 429
-            ? 'Pollinations rate limit reached. Please wait before trying again.'
-            : response.status === 401
-              ? 'Pollinations rejected the API key. Check POLLINATIONS_API_KEY in your local .env file.'
-              : providerMessage || 'Pollinations image editing failed.';
-      return res.status(response.status === 401 || response.status === 402 || response.status === 429 ? response.status : 502).json({
-        error: errorMessage,
-      });
-    }
-
-    const generatedImage = result?.data?.[0];
-    if (!generatedImage?.b64_json) {
-      return res.status(502).json({ error: 'Pollinations returned no generated image data.' });
-    }
-
-    const imageUrl = `data:${generatedImage.media_type || 'image/png'};base64,${generatedImage.b64_json}`;
+    const imageUrl = await generateLifestyleMockup(req.body as LifestyleMockupRequest);
     return res.json({ imageUrl });
-  } catch (error: any) {
-    console.error('Error generating lifestyle scene:', error);
-    const msg = error?.message || 'Failed to generate lifestyle scene';
-    let userMsg = msg;
-    if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('authentication credential')) {
-      userMsg = 'Invalid authentication credentials. Please select or verify your API key in the AI Studio Secrets panel.';
+  } catch (error) {
+    if (error instanceof LifestyleMockupError) {
+      return res.status(error.statusCode).json({ error: error.message });
     }
+    console.error('Error generating lifestyle scene:', error);
     return res.status(500).json({
-      error: userMsg,
+      error: 'Failed to generate lifestyle scene.',
     });
   }
 });
