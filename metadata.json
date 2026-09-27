@@ -1,0 +1,6 @@
+{
+  "name": "CaseCraft Studio: AI Design & Lifestyle Mockup Generator",
+  "description": "Generate niche-customized designs with dynamic prompt placeholders and instantly visualize on photorealistic iPhone & Samsung lifestyle phone case mockups.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
