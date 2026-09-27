@@ -3,7 +3,7 @@ const router = express.Router();
 
 // Pollinations API Key from environment or user-provided configuration
 const getPollinationsKey = (): string => {
-  return process.env.POLLINATIONS_API_KEY || 'sk_7hxiVgx2Ngtoc3coIgOT3NPPKNzHkc3j';
+  return process.env.POLLINATIONS_API_KEY || '';
 };
 
 // API: Generate Design Artwork using Pollinations API
