@@ -11,12 +11,25 @@ export type MockupWorkflowStep =
 export interface MockupWorkflowState {
   activeStep: MockupWorkflowStep;
   artwork: { fileName: string; imageUrl: string } | null;
-  productReferenceId: string | null;
-  productReferenceImage: { fileName: string; imageUrl: string } | null;
+  productReferenceIds: string[];
+  productReferenceImages: Record<string, { fileName: string; imageUrl: string }>;
+  sceneReferenceImages: { id: string; fileName: string; imageUrl: string }[];
   sceneDescription: string;
+  generatedMockups: GeneratedWorkflowMockup[];
   generatedImageUrl: string | null;
   isGenerating: boolean;
+  generationProgress: string | null;
   generationError: string | null;
+}
+
+export interface GeneratedWorkflowMockup {
+  modelId: string;
+  modelName: string;
+  sceneTitle: string;
+  prompt: string;
+  imageUrl: string | null;
+  status: 'generating' | 'generated' | 'failed';
+  error?: string;
 }
 
 export type CaseType = 'slim' | 'clear' | 'tough' | 'silicone' | 'protective';
@@ -86,7 +99,7 @@ export type SkinTone = 'fair' | 'honey' | 'bronze' | 'deep';
 export interface PresetLifestyleScenario {
   id: string;
   title: string;
-  category: 'social' | 'outdoor' | 'cafe' | 'work' | 'everyday';
+  category: 'social' | 'outdoor' | 'cafe' | 'work' | 'everyday' | 'product';
   description: string;
   prompt: string;
   cameraAngle: string;

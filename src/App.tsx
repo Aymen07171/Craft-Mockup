@@ -2,17 +2,58 @@ import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { WorkflowStudio } from './components/WorkflowStudio';
 import { PRINTIFY_TEMPLATES } from './data/printifyReferences';
-import { MockupWorkflowState } from './types';
+import { GeneratedWorkflowMockup, MockupWorkflowState } from './types';
+
+const generateCaseScene = async (
+  artworkImageUrl: string,
+  sceneDescription: string,
+  referenceId: string,
+  variationIndex: number,
+  productMockupUrl?: string,
+  sceneReferenceImageUrls: string[] = []
+) => {
+  const reference = PRINTIFY_TEMPLATES.find((item) => item.id === referenceId);
+  if (!reference) throw new Error('The selected Printify model is unavailable.');
+
+  const featureDescription = [
+    reference.caseFeatures.toughBumper ? 'reinforced tough bumper' : '',
+    reference.caseFeatures.raisedBezel ? 'raised protective bezel' : '',
+    reference.caseFeatures.wrapBleed ? 'full-bleed wrap print' : '',
+  ].filter(Boolean).join(', ');
+  const response = await fetch('/api/generate-lifestyle-scene', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      designImageUrl: artworkImageUrl,
+      productMockupUrl,
+      sceneReferenceImages: sceneReferenceImageUrls,
+      userScenePrompt: sceneDescription,
+      styleDirection: `Maintain this shared visual theme while making this case's composition distinct. Variation ${variationIndex}: vary camera angle, phone placement, lighting, environment, and props.`,
+      modelName: reference.modelName,
+      brand: reference.brand,
+      dimensions: reference.dimensions,
+      cameraCutoutDesc: `${reference.cameraCutout.description}; ${reference.cameraCutout.position}; ${reference.cameraCutout.cornerCurvature} corners`,
+      caseShapeDesc: `${reference.dimensions.mmWidth}mm x ${reference.dimensions.mmHeight}mm case, ${reference.cameraCutout.aspectRatio.toFixed(4)} width-to-height ratio, ${reference.cameraCutout.cornerCurvature} corner curvature; ${featureDescription}`,
+      variationIndex,
+    }),
+  });
+  const data = (await response.json().catch(() => ({}))) as { imageUrl?: string; error?: string };
+  if (!response.ok || !data.imageUrl) throw new Error(data.error || `Failed to generate ${reference.modelName}.`);
+  return { reference, imageUrl: data.imageUrl };
+};
 
 export default function App() {
   const [workflow, setWorkflow] = useState<MockupWorkflowState>({
     activeStep: 'upload-design',
     artwork: null,
-    productReferenceId: null,
-    productReferenceImage: null,
+    productReferenceIds: [],
+    productReferenceImages: {},
+    sceneReferenceImages: [],
     sceneDescription: '',
+    generatedMockups: [],
     generatedImageUrl: null,
     isGenerating: false,
+    generationProgress: null,
     generationError: null,
   });
 
@@ -23,6 +64,7 @@ export default function App() {
       setWorkflow((current) => ({
         ...current,
         artwork: { fileName: file.name, imageUrl: reader.result as string },
+        generatedMockups: [],
         generatedImageUrl: null,
         generationError: null,
       }));
@@ -30,13 +72,35 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const handleUploadProductReference = (file: File) => {
+  const handleUploadProductReference = (modelId: string, file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== 'string') return;
       setWorkflow((current) => ({
         ...current,
-        productReferenceImage: { fileName: file.name, imageUrl: reader.result as string },
+        productReferenceImages: {
+          ...current.productReferenceImages,
+          [modelId]: { fileName: file.name, imageUrl: reader.result as string },
+        },
+        generatedMockups: [],
+        generatedImageUrl: null,
+        generationError: null,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadSceneReference = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      setWorkflow((current) => ({
+        ...current,
+        sceneReferenceImages: [
+          ...current.sceneReferenceImages,
+          { id: crypto.randomUUID(), fileName: file.name, imageUrl: reader.result as string },
+        ],
+        generatedMockups: [],
         generatedImageUrl: null,
         generationError: null,
       }));
@@ -46,57 +110,87 @@ export default function App() {
 
   const handleGenerateMockup = async () => {
     const request = workflow;
-    if (!request.artwork || !request.productReferenceImage || !request.sceneDescription.trim()) {
+    if (
+      !request.artwork ||
+      request.productReferenceIds.length === 0 ||
+      !request.sceneDescription.trim()
+    ) {
       setWorkflow((current) => ({
         ...current,
-        generationError: 'Upload the artwork and a product reference image, then describe the scene.',
+        generationError: 'Upload the artwork, select at least one case, and describe the shared scene theme.',
       }));
       return;
     }
 
-    const selectedReference = PRINTIFY_TEMPLATES.find(
-      (reference) => reference.id === request.productReferenceId
-    );
-    setWorkflow((current) => ({ ...current, isGenerating: true, generationError: null }));
+    const references = request.productReferenceIds
+      .map((id) => PRINTIFY_TEMPLATES.find((reference) => reference.id === id))
+      .filter((reference) => reference !== undefined);
+    const generatedMockups: GeneratedWorkflowMockup[] = references.map((reference) => ({
+      modelId: reference.id,
+      modelName: reference.modelName,
+      sceneTitle: `${reference.modelName} scene`,
+      prompt: request.sceneDescription,
+      imageUrl: null,
+      status: 'generating',
+    }));
+    setWorkflow((current) => ({
+      ...current,
+      generatedMockups,
+      generatedImageUrl: null,
+      isGenerating: true,
+      generationProgress: `Preparing ${references.length} individual case scenes...`,
+      generationError: null,
+    }));
 
     try {
-      const response = await fetch('/api/generate-lifestyle-scene', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          designImageUrl: request.artwork.imageUrl,
-          productMockupUrl: request.productReferenceImage.imageUrl,
-          userScenePrompt: request.sceneDescription,
-          modelName: selectedReference?.modelName ?? 'Model shown in supplied product reference',
-          brand: selectedReference?.brand ?? 'unspecified',
-          dimensions: selectedReference?.dimensions,
-          cameraCutoutDesc:
-            selectedReference?.cameraCutout.description ??
-            'Match the exact camera opening visible in the supplied product reference image',
-          caseType: 'Case construction shown in supplied product reference',
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        imageUrl?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !data.imageUrl) {
-        throw new Error(data.error || 'Lifestyle mockup generation failed.');
+      for (const [index, reference] of references.entries()) {
+        setWorkflow((current) => ({
+          ...current,
+          generationProgress: `Generating ${reference.modelName} scene (${index + 1} of ${references.length})...`,
+        }));
+        try {
+          const { imageUrl } = await generateCaseScene(
+            request.artwork.imageUrl,
+            request.sceneDescription,
+            reference.id,
+            index + 1,
+            request.productReferenceImages[reference.id]?.imageUrl,
+            request.sceneReferenceImages.map((image) => image.imageUrl)
+          );
+          generatedMockups[index] = {
+            ...generatedMockups[index],
+            imageUrl,
+            status: 'generated',
+          };
+        } catch (error) {
+          generatedMockups[index] = {
+            ...generatedMockups[index],
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Scene generation failed.',
+          };
+        }
+        setWorkflow((current) => ({ ...current, generatedMockups: [...generatedMockups] }));
       }
-      const generatedImageUrl = data.imageUrl;
 
       setWorkflow((current) => {
         const inputsChanged =
           current.artwork?.imageUrl !== request.artwork?.imageUrl ||
-          current.productReferenceImage?.imageUrl !== request.productReferenceImage?.imageUrl ||
-          current.productReferenceId !== request.productReferenceId ||
+          current.productReferenceIds.join(',') !== request.productReferenceIds.join(',') ||
+          Object.keys(current.productReferenceImages).length !== Object.keys(request.productReferenceImages).length ||
+          Object.entries(request.productReferenceImages).some(
+            ([modelId, image]) => current.productReferenceImages[modelId]?.imageUrl !== image.imageUrl
+          ) ||
+          current.sceneReferenceImages.length !== request.sceneReferenceImages.length ||
+          request.sceneReferenceImages.some(
+            (image, index) => current.sceneReferenceImages[index]?.imageUrl !== image.imageUrl
+          ) ||
           current.sceneDescription !== request.sceneDescription;
 
         if (inputsChanged) {
           return {
             ...current,
             isGenerating: false,
+            generationProgress: null,
             generationError: 'Inputs changed while generating. Run generation again to use the updated inputs.',
           };
         }
@@ -104,17 +198,62 @@ export default function App() {
         return {
           ...current,
           activeStep: 'preview-result',
-          generatedImageUrl,
+          generatedMockups,
+          generatedImageUrl: generatedMockups.find((mockup) => mockup.imageUrl)?.imageUrl ?? null,
           isGenerating: false,
-          generationError: null,
+          generationProgress: null,
+          generationError: generatedMockups.some((mockup) => mockup.status === 'failed')
+            ? 'Some scenes could not be generated. Failed cases are marked in the gallery and can be retried.'
+            : null,
         };
       });
     } catch (error) {
       setWorkflow((current) => ({
         ...current,
         isGenerating: false,
+        generationProgress: null,
         generationError:
           error instanceof Error ? error.message : 'Lifestyle mockup generation failed.',
+      }));
+    }
+  };
+
+  const handleRegenerateMockup = async (modelId: string) => {
+    if (!workflow.artwork) return;
+    const index = workflow.generatedMockups.findIndex((item) => item.modelId === modelId);
+    const currentMockup = workflow.generatedMockups[index];
+    if (index < 0 || !currentMockup) return;
+    setWorkflow((current) => ({
+      ...current,
+      generatedMockups: current.generatedMockups.map((item) =>
+        item.modelId === modelId ? { ...item, status: 'generating', error: undefined } : item
+      ),
+      generationError: null,
+    }));
+    try {
+      const { imageUrl } = await generateCaseScene(
+        workflow.artwork.imageUrl,
+        workflow.sceneDescription,
+        modelId,
+        index + 1,
+        workflow.productReferenceImages[modelId]?.imageUrl,
+        workflow.sceneReferenceImages.map((image) => image.imageUrl)
+      );
+      setWorkflow((current) => ({
+        ...current,
+        generatedMockups: current.generatedMockups.map((item) =>
+          item.modelId === modelId ? { ...item, imageUrl, status: 'generated', error: undefined } : item
+        ),
+        generatedImageUrl: imageUrl,
+      }));
+    } catch (error) {
+      setWorkflow((current) => ({
+        ...current,
+        generatedMockups: current.generatedMockups.map((item) =>
+          item.modelId === modelId
+            ? { ...item, status: 'failed', error: error instanceof Error ? error.message : 'Scene generation failed.' }
+            : item
+        ),
       }));
     }
   };
@@ -131,11 +270,33 @@ export default function App() {
           onSelectStep={(activeStep) => setWorkflow((current) => ({ ...current, activeStep }))}
           onUploadArtwork={handleUploadArtwork}
           onUploadProductReference={handleUploadProductReference}
-          onGenerate={handleGenerateMockup}
-          onSelectReference={(productReferenceId) =>
+          onUploadSceneReference={handleUploadSceneReference}
+          onRemoveSceneReference={(imageId) =>
             setWorkflow((current) => ({
               ...current,
-              productReferenceId,
+              sceneReferenceImages: current.sceneReferenceImages.filter((image) => image.id !== imageId),
+              generatedMockups: [],
+              generatedImageUrl: null,
+              generationError: null,
+            }))
+          }
+          onGenerate={handleGenerateMockup}
+          onToggleReference={(productReferenceId) =>
+            setWorkflow((current) => ({
+              ...current,
+              productReferenceIds: current.productReferenceIds.includes(productReferenceId)
+                ? current.productReferenceIds.filter((id) => id !== productReferenceId)
+                : [...current.productReferenceIds, productReferenceId],
+              generatedMockups: [],
+              generatedImageUrl: null,
+              generationError: null,
+            }))
+          }
+          onSelectAllReferences={(productReferenceIds) =>
+            setWorkflow((current) => ({
+              ...current,
+              productReferenceIds,
+              generatedMockups: [],
               generatedImageUrl: null,
               generationError: null,
             }))
@@ -144,9 +305,31 @@ export default function App() {
             setWorkflow((current) => ({
               ...current,
               sceneDescription,
-              generatedImageUrl: null,
               generationError: null,
             }))
+          }
+          onRemoveProductReference={(modelId) =>
+            setWorkflow((current) => {
+              const productReferenceImages = { ...current.productReferenceImages };
+              delete productReferenceImages[modelId];
+              return {
+                ...current,
+                productReferenceImages,
+                generatedMockups: [],
+                generatedImageUrl: null,
+              };
+            })
+          }
+          onRegenerateMockup={handleRegenerateMockup}
+          onRemoveMockup={(modelId) =>
+            setWorkflow((current) => {
+              const generatedMockups = current.generatedMockups.filter((item) => item.modelId !== modelId);
+              return {
+                ...current,
+                generatedMockups,
+                generatedImageUrl: generatedMockups.find((item) => item.imageUrl)?.imageUrl ?? null,
+              };
+            })
           }
         />
       </main>

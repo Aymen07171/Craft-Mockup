@@ -1,7 +1,9 @@
 export interface LifestyleMockupRequest {
   designImageUrl?: string;
   productMockupUrl?: string;
+  sceneReferenceImages?: string[];
   userScenePrompt?: string;
+  styleDirection?: string;
   modelName?: string;
   brand?: string;
   caseType?: string;
@@ -11,6 +13,7 @@ export interface LifestyleMockupRequest {
     mmWidth: number;
     mmHeight: number;
   };
+  caseShapeDesc?: string;
   cameraCutoutDesc?: string;
   variationIndex?: number;
 }
@@ -29,10 +32,6 @@ export async function generateLifestyleMockup(input: LifestyleMockupRequest): Pr
   if (!input.designImageUrl) {
     throw new LifestyleMockupError('Design artwork image is required.', 400);
   }
-  if (!input.productMockupUrl) {
-    throw new LifestyleMockupError('A product reference image is required to preserve the case appearance.', 400);
-  }
-
   const apiKey = process.env.POLLINATIONS_API_KEY;
   if (!apiKey) {
     throw new LifestyleMockupError(
@@ -52,23 +51,41 @@ export async function generateLifestyleMockup(input: LifestyleMockupRequest): Pr
     : 'follow the proportions visible in the product reference image';
   const cameraDescription =
     input.cameraCutoutDesc || 'the exact camera opening visible in the product reference image';
+  const sceneReferenceStartIndex = input.productMockupUrl ? 3 : 2;
+  const sourceImageInstructions = [
+    'Image 1 is the immutable case artwork.',
+    input.productMockupUrl ? 'Image 2 is the product reference for this exact selected model.' : '',
+    ...(input.sceneReferenceImages ?? []).map(
+      (_, index) => `Image ${sceneReferenceStartIndex + index} is a scene-only reference for environment, props, lighting, or mood.`
+    ),
+  ].filter(Boolean).join('\n');
+  const productGeometryInstruction = input.productMockupUrl
+    ? 'Preserve the physical case shape, materials, finish, edges, buttons, camera opening, proportions, and cutouts shown in Image 2. Do not substitute another case or model.'
+    : `Reconstruct the named catalog model using the physical geometry, dimensions, camera opening, and features specified below. Do not substitute another case or model.`;
   const prompt = `[PRODUCT AND ARTWORK PRESERVATION]:
-Create one photorealistic commercial lifestyle photograph using two separate source images:
-Image 1 is the user's original case artwork. Image 2 is the authoritative phone-case product reference.
+Create one photorealistic commercial lifestyle photograph using the user's original case artwork and the exact catalog model specifications below.
+${sourceImageInstructions}
 
 PRODUCT MUST REMAIN FIXED:
-- Preserve the physical case shape, materials, finish, edges, buttons, camera opening, proportions, and cutouts shown in Image 2. Do not substitute another case or model.
-- Device: ${input.modelName || 'the phone shown in Image 2'} (${brandName}).
-- Case construction: ${input.caseType || 'as shown in Image 2'}.
+- ${productGeometryInstruction}
+- Device: ${input.modelName || 'the selected catalog phone case'} (${brandName}).
+- Case construction: ${input.caseType || 'as specified by the selected catalog model'}.
 - Reference dimensions: ${dimensionInfo}.
+- Physical case shape and features: ${input.caseShapeDesc || 'follow the exact named catalog model and its standard physical design'}.
 - Camera opening: ${cameraDescription}.
-- Keep the exact original artwork from Image 1 on the back of the case. Do not redraw, recolor, restyle, crop, or replace it. Keep it sharp, full-bleed, and clearly recognizable.
-- Show the back of the phone prominently, held naturally without fingers covering the artwork.
+- Image 1 is the immutable artwork source. Reproduce its exact design, colors, layout, and details on the case; do not redraw, reinterpret, recolor, crop, mirror, or replace any part of it.
+- Image 1 is the immutable artwork source. Reproduce its exact design, colors, layout, and details on the case; do not redraw, reinterpret, recolor, crop, mirror, or replace any part of it.
+- Keep the complete case-back artwork sharp, flat, correctly aligned, and unobstructed. Nothing may cross over the artwork.
+- Match the artwork placement and scale to the product reference when supplied; otherwise fit it to the selected model specifications. Do not invent graphics, text, logos, or watermarks.
 
 ENVIRONMENT IS CREATIVE:
-- Scene: "${input.userScenePrompt || 'A person casually holding their phone, with the back of the phone case facing the camera.'}"
-- Create a natural person, setting, lighting, and composition appropriate to that scene.
-- Commercial lifestyle photography, realistic hand anatomy, natural contact shadows, and photorealistic depth of field.
+- Scene: "${input.userScenePrompt || 'A premium product photograph with the case back facing the camera.'}"
+- Follow the scene's specified setting, lighting, and composition.
+- Additional styling direction: "${input.styleDirection || 'Use subtle cues from the artwork itself; do not override the specified scene composition.'}"
+- Follow the scene's specified camera angle, phone placement, orientation, environment, and presence or absence of a person. Do not default to a handheld composition.
+${input.sceneReferenceImages?.length ? '- Use scene-only references to guide the background and styling; never copy their phone, case, or artwork into this result.' : ''}
+- Use premium commercial product photography, realistic materials and contact shadows, and natural depth of field. If hands are present, show anatomically natural hands with fingers only on the case edges.
+- This is a real product photograph, not a 3D render, illustration, collage, or image with text.
 - Variation: #${input.variationIndex ?? 1}.
 
 Return a single photorealistic image.`;
@@ -86,7 +103,8 @@ Return a single photorealistic image.`;
         prompt,
         image: [
           { image_url: input.designImageUrl },
-          { image_url: input.productMockupUrl },
+          ...(input.productMockupUrl ? [{ image_url: input.productMockupUrl }] : []),
+          ...(input.sceneReferenceImages ?? []).map((imageUrl) => ({ image_url: imageUrl })),
         ],
         size: '1536x1024',
         response_format: 'b64_json',
