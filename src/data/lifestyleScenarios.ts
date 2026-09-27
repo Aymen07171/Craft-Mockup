@@ -62,3 +62,46 @@ export const LIFESTYLE_SCENARIOS: PresetLifestyleScenario[] = [
     personPose: 'Hand holding phone above desk surface, backplate clearly exposed',
   },
 ];
+
+export const DIVERSE_MOCKUP_CONCEPTS = [
+  {
+    title: 'Handheld City Portrait',
+    prompt: 'Eye-level handheld lifestyle portrait outdoors. A person holds the phone one-handed at shoulder height with the full case back facing the lens. Frame the hand and phone prominently against a softly blurred city street; fingers touch only the case edges.',
+  },
+  {
+    title: 'Marble Desk Still Life',
+    prompt: 'Low three-quarter tabletop product photograph. Place the phone diagonally on a pale veined marble desk, case back completely visible, with a closed notebook far behind it. Cool window light and long natural shadows; no person or hand.',
+  },
+  {
+    title: 'Artwork Detail Close-Up',
+    prompt: 'Extreme close-up commercial product photograph of the case back filling almost the entire frame. Keep the complete artwork plane sharply visible with realistic fine case texture and precise print edges; use raking studio light and a nearly black background.',
+  },
+  {
+    title: 'Themed Flat Lay',
+    prompt: 'Strictly overhead flat-lay on a warm cream tabletop. Place the phone vertically just off-center with its full case artwork facing up; arrange a few small objects inspired by the artwork at the outer corners, well clear of the phone and its shadow.',
+  },
+  {
+    title: 'Minimal Studio Hero',
+    prompt: 'Minimal premium studio hero photograph: one phone standing upright, case back squarely facing camera against a seamless soft sage-green background. Broad diffused key light and subtle grounded shadow; no props, text, or extra devices.',
+  },
+  {
+    title: 'Bookshop Discovery',
+    prompt: 'Authentic bookstore café lifestyle photograph from a seated table perspective. The phone rests on a dark wood table beside a closed book, case back fully visible and sharply focused; bookshelves and warm pendant lights dissolve into background bokeh. No hands.',
+  },
+  {
+    title: 'First-Person In-Hand',
+    prompt: 'First-person point of view looking down at one hand holding the phone over a sunlit park bench. The case back faces the viewer and remains fully visible; thumb and fingertips wrap only around the outer frame. Grass and path softly out of focus.',
+  },
+  {
+    title: 'Three-Quarter Product Angle',
+    prompt: 'Premium three-quarter product photograph with the phone lying diagonally on dark green felt. A low offset camera reveals case thickness and side buttons while keeping the complete back artwork sharp. A narrow softbox highlight defines the case edge.',
+  },
+  {
+    title: 'Standing by the Bedside',
+    prompt: 'Vertical lifestyle product photograph at a bedside table in soft morning light. Stand the phone upright, leaning securely against a small ceramic lamp base, case back toward camera and full artwork visible. Bed linens and window light form a softly blurred background.',
+  },
+  {
+    title: 'Artwork-Inspired Scene',
+    prompt: 'Create an elegant themed product-photography set based only on colors and motifs visible in the supplied case artwork. Place the phone upright at a gentle three-quarter angle on a complementary sculptural plinth, with restrained matching materials and directional editorial light. Keep props beside or behind the phone.',
+  },
+] as const;
