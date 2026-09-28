@@ -39,18 +39,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Center Pill: Pollinations API Badge */}
+          {/* Center Pill: Gemini API Badge */}
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-slate-300 font-medium">Engine:</span>
-            <a
-              href="https://pollinations.ai"
-              target="_blank"
-              rel="noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 font-semibold hover:underline"
-            >
-              Pollinations API
-            </a>
+            <span className="text-indigo-400 font-semibold">Gemini API</span>
             <span className="text-[10px] text-emerald-400/90 font-mono bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-800/40">
               Active
             </span>

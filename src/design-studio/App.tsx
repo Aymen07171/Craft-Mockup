@@ -106,17 +106,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
-        <p>
-          CaseCraft Design Studio • Powered by{' '}
-          <a
-            href="https://pollinations.ai"
-            target="_blank"
-            rel="noreferrer"
-            className="text-indigo-400 hover:underline"
-          >
-            Pollinations API
-          </a>
-        </p>
+        <p>CaseCraft Design Studio • Powered by Gemini</p>
       </footer>
     </div>
   );

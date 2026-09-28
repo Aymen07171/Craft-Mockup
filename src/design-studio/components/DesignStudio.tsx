@@ -30,6 +30,7 @@ interface DesignStudioProps {
   onDeleteDesign: (id: string) => void;
   onDesignGenerated: (design: GeneratedDesign) => void;
   resetTrigger?: number;
+  onSendToMockup?: (design: GeneratedDesign) => void;
 }
 
 export const DesignStudio: React.FC<DesignStudioProps> = ({
@@ -38,6 +39,7 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
   onSelectDesign,
   onDeleteDesign,
   onDesignGenerated,
+  onSendToMockup,
 }) => {
   const [selectedNicheId, setSelectedNicheId] = useState<string>(NICHE_PRESETS[0].id);
   const currentPreset: NichePreset =
@@ -50,7 +52,6 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(
     currentPreset.defaultAspectRatio || '9:16'
   );
-  const [model, setModel] = useState<string>('flux');
   const [customSeed, setCustomSeed] = useState<string>('');
   const [useRandomSeed, setUseRandomSeed] = useState<boolean>(true);
 
@@ -215,7 +216,7 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
     }
   };
 
-  // Trigger Design Generation via Free Pollinations.ai
+  // Generate artwork through the server-side Gemini API.
   const handleGenerateDesign = async (overrideSeed?: number) => {
     setIsGenerating(true);
     setGenerationError(null);
@@ -237,14 +238,13 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
           prompt: dynamicPrompt,
           aspectRatio,
           seed: chosenSeed,
-          model,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.imageUrl) {
-        throw new Error(data.error || 'Failed to generate design with Pollinations.ai');
+        throw new Error(data.error || 'Failed to generate design with Gemini.');
       }
 
       const newDesign: GeneratedDesign = {
@@ -264,8 +264,8 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
 
       onDesignGenerated(newDesign);
     } catch (err: any) {
-      console.error('Pollinations generation failed:', err);
-      setGenerationError(err.message || 'Image generation failed with Pollinations.ai');
+      console.error('Gemini image generation failed:', err);
+      setGenerationError(err.message || 'Image generation failed with Gemini.');
     } finally {
       setIsGenerating(false);
     }
@@ -328,7 +328,7 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
               <code className="text-indigo-300 bg-indigo-950/60 px-1 py-0.5 rounded text-xs">
                 &#123;&#123;COLOR_PALETTE&#125;&#125;
               </code>
-              ), and generate high-resolution illustrations for free with Pollinations.ai.
+                ), and generate original illustrations with Gemini.
             </p>
           </div>
 
@@ -658,7 +658,7 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
                   <Sliders className="w-3.5 h-3.5 text-indigo-400" />
                   Generation Settings
                 </span>
-                <span className="text-[11px] text-emerald-400 font-medium">Pollinations API (Active)</span>
+                <span className="text-[11px] text-emerald-400 font-medium">Gemini API</span>
               </div>
 
               {/* Aspect Ratio Buttons */}
@@ -729,7 +729,7 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
               </div>
             )}
 
-            {/* Main Generate Button with Pollinations API */}
+            {/* Main Generate Button with Gemini */}
             <button
               onClick={() => handleGenerateDesign()}
               disabled={isGenerating}
@@ -742,12 +742,12 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Synthesizing with Pollinations API...</span>
+                  <span>Generating with Gemini...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>Generate Artwork with Pollinations API</span>
+                  <span>Generate Artwork with Gemini</span>
                 </>
               )}
             </button>
@@ -827,6 +827,17 @@ export const DesignStudio: React.FC<DesignStudioProps> = ({
                   {activeDesign.seed && <span>Seed: {activeDesign.seed}</span>}
                   <span className="text-emerald-400 font-medium">Free AI</span>
                 </div>
+
+                {onSendToMockup && (
+                  <button
+                    type="button"
+                    onClick={() => onSendToMockup(activeDesign)}
+                    className="mt-3 w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50 transition cursor-pointer"
+                  >
+                    <span>Send Artwork to Lifestyle Mockup Pipeline</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           )}

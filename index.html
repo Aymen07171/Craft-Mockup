@@ -3,31 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111719" />
-    <title>CaseCraft Studio</title>
-    <style>
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #111719; color: #edf1ee; }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; }
-      main { width: min(680px, calc(100% - 40px)); margin: 0 auto; padding: 12vh 0 64px; }
-      h1 { margin: 0; font-size: 28px; font-weight: 600; }
-      p { margin: 10px 0 28px; color: #a9b4af; font-size: 14px; }
-      nav { display: grid; gap: 10px; }
-      a { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; color: inherit; text-decoration: none; background: #192123; border: 1px solid #34413f; border-radius: 6px; }
-      a:hover, a:focus-visible { border-color: #9bb7a5; background: #202b2b; outline: none; }
-      a span:last-child { color: #a9b4af; }
-      @media (max-width: 480px) { main { padding-top: 48px; } a { padding: 16px; } }
-    </style>
+    <meta name="theme-color" content="#020617" />
+    <title>CaseCraft Studio: AI Design &amp; Lifestyle Mockup Generator</title>
+    <meta name="description" content="Generate niche-customized designs with dynamic prompt placeholders and instantly visualize on photorealistic iPhone &amp; Samsung lifestyle phone case mockups." />
+    <meta property="og:title" content="CaseCraft Studio: AI Design &amp; Lifestyle Mockup Generator" />
+    <meta property="og:description" content="Generate niche-customized designs with dynamic prompt placeholders and instantly visualize on photorealistic iPhone &amp; Samsung lifestyle phone case mockups." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><rect width='24' height='24' rx='6'/></svg>" />
   </head>
-  <body>
-    <main>
-      <h1>CaseCraft Studio</h1>
-      <p>Select an application</p>
-      <nav aria-label="Applications">
-        <a href="/design-studio/"><span>Design Studio</span><span aria-hidden="true">&#8594;</span></a>
-        <a href="/mockup-studio/"><span>Phone Case Mockup Workflow</span><span aria-hidden="true">&#8594;</span></a>
-      </nav>
-    </main>
+  <body class="bg-slate-950 text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

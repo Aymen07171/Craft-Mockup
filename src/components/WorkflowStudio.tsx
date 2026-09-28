@@ -33,6 +33,7 @@ interface WorkflowStudioProps {
   onRemoveProductReference: (modelId: string) => void;
   onRegenerateMockup: (modelId: string) => void;
   onRemoveMockup: (modelId: string) => void;
+  onContinueToDrive?: () => void;
 }
 
 const STEPS: { id: MockupWorkflowStep; title: string; description: string }[] = [
@@ -60,6 +61,7 @@ export const WorkflowStudio: React.FC<WorkflowStudioProps> = ({
   onRemoveProductReference,
   onRegenerateMockup,
   onRemoveMockup,
+  onContinueToDrive,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sceneReferenceInputRef = useRef<HTMLInputElement>(null);
@@ -472,13 +474,36 @@ export const WorkflowStudio: React.FC<WorkflowStudioProps> = ({
             Continue <ArrowRight className="h-4 w-4" />
           </button>
         ) : stepIndex === 4 && workflow.generatedImageUrl ? (
-          <button
-            type="button"
-            onClick={() => onSelectStep('download-result')}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400"
-          >
-            Continue to download <ArrowRight className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSelectStep('download-result')}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
+            >
+              <Download className="h-4 w-4" /> Download Local
+            </button>
+            {onContinueToDrive && (
+              <button
+                type="button"
+                onClick={onContinueToDrive}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-400 shadow-md shadow-indigo-950 cursor-pointer"
+              >
+                <span>Continue to Google Drive Assets</span> <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ) : stepIndex === 5 ? (
+          onContinueToDrive ? (
+            <button
+              type="button"
+              onClick={onContinueToDrive}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-400 shadow-md shadow-indigo-950 cursor-pointer"
+            >
+              <span>Proceed to Google Drive Storage</span> <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <span className="text-xs text-slate-500">Download complete</span>
+          )
         ) : (
           <span className="text-xs text-slate-500">
             {workflow.isGenerating ? 'Generation in progress' : stepIndex === 3 ? 'Ready when inputs are complete' : 'Review the result before downloading'}

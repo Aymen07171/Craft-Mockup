@@ -1,3 +1,5 @@
+import { GoogleGenAI } from '@google/genai';
+
 export interface LifestyleMockupRequest {
   designImageUrl?: string;
   productMockupUrl?: string;
@@ -19,23 +21,58 @@ export interface LifestyleMockupRequest {
 }
 
 export class LifestyleMockupError extends Error {
-  constructor(
-    message: string,
-    readonly statusCode: number
-  ) {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
     super(message);
     this.name = 'LifestyleMockupError';
+    this.statusCode = statusCode;
   }
 }
+
+const toInlineImage = async (url: string) => {
+  const dataUrl = url.match(/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/]+=*)$/i);
+  if (dataUrl) {
+    const byteLength = Buffer.from(dataUrl[2], 'base64').byteLength;
+    if (byteLength > 12 * 1024 * 1024) {
+      throw new LifestyleMockupError('A reference image is too large. Use images smaller than 12 MB.', 413);
+    }
+    return { inlineData: { mimeType: dataUrl[1], data: dataUrl[2] }, byteLength };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new LifestyleMockupError('Reference images must be uploaded image data or HTTPS image URLs.', 400);
+  }
+  if (parsedUrl.protocol !== 'https:') {
+    throw new LifestyleMockupError('Reference image URLs must use HTTPS.', 400);
+  }
+
+  const response = await fetch(parsedUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) {
+    throw new LifestyleMockupError(`Could not load a reference image (${response.status}).`, 400);
+  }
+  const mimeType = response.headers.get('content-type')?.split(';')[0] || '';
+  if (!/^image\/(png|jpe?g|webp)$/i.test(mimeType)) {
+    throw new LifestyleMockupError('A reference URL did not return a PNG, JPEG, or WebP image.', 400);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.byteLength > 12 * 1024 * 1024) {
+    throw new LifestyleMockupError('A reference image is too large. Use images smaller than 12 MB.', 413);
+  }
+  return { inlineData: { mimeType, data: bytes.toString('base64') }, byteLength: bytes.byteLength };
+};
 
 export async function generateLifestyleMockup(input: LifestyleMockupRequest): Promise<string> {
   if (!input.designImageUrl) {
     throw new LifestyleMockupError('Design artwork image is required.', 400);
   }
-  const apiKey = process.env.POLLINATIONS_API_KEY;
-  if (!apiKey) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.startsWith('your_')) {
     throw new LifestyleMockupError(
-      'Pollinations API key is missing. Set POLLINATIONS_API_KEY in your Netlify environment variables.',
+      'Gemini is not configured. Set GEMINI_API_KEY in your environment and restart the app.',
       503
     );
   }
@@ -90,63 +127,47 @@ ${input.sceneReferenceImages?.length ? '- Use scene-only references to guide the
 
 Return a single photorealistic image.`;
 
-  let response: Response;
+  let imageParts;
   try {
-    response = await fetch('https://gen.pollinations.ai/v1/images/edits', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const imageUrls = [
+      input.designImageUrl,
+      ...(input.productMockupUrl ? [input.productMockupUrl] : []),
+      ...(input.sceneReferenceImages ?? []),
+    ];
+    imageParts = await Promise.all(imageUrls.map(toInlineImage));
+    const totalBytes = imageParts.reduce((total, part) => total + part.byteLength, 0);
+    if (totalBytes > 20 * 1024 * 1024) {
+      throw new LifestyleMockupError('The combined reference images are too large. Use images totaling less than 20 MB.', 413);
+    }
+  } catch (error) {
+    if (error instanceof LifestyleMockupError) throw error;
+    throw new LifestyleMockupError('Could not load the reference images for Gemini.', 502);
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite-image',
+      contents: {
+        parts: [...imageParts.map(({ inlineData }) => ({ inlineData })), { text: prompt }],
       },
-      body: JSON.stringify({
-        model: 'openai/gpt-image-2',
-        prompt,
-        image: [
-          { image_url: input.designImageUrl },
-          ...(input.productMockupUrl ? [{ image_url: input.productMockupUrl }] : []),
-          ...(input.sceneReferenceImages ?? []).map((imageUrl) => ({ image_url: imageUrl })),
-        ],
-        size: '1536x1024',
-        response_format: 'b64_json',
-      }),
+      config: { imageConfig: { aspectRatio: '16:9' } },
     });
-  } catch {
-    throw new LifestyleMockupError('Could not reach Pollinations. Please try again.', 502);
-  }
-
-  const result = (await response.json().catch(() => null)) as {
-    data?: Array<{ b64_json?: string; media_type?: string }>;
-    error?: string | { message?: string };
-  } | null;
-
-  if (!response.ok) {
-    const providerMessage =
-      typeof result?.error === 'string' ? result.error : result?.error?.message;
-    if (response.status === 401) {
-      throw new LifestyleMockupError(
-        'Pollinations rejected the API key. Check POLLINATIONS_API_KEY in your Netlify environment variables.',
-        401
-      );
+    const generatedImage = response.candidates?.[0]?.content?.parts?.find((part) => part.inlineData);
+    if (!generatedImage?.inlineData?.data) {
+      throw new LifestyleMockupError(response.text || 'Gemini did not return a lifestyle image.', 502);
     }
-    if (response.status === 402) {
-      throw new LifestyleMockupError(
-        'Pollinations credits are exhausted. Check your available Pollen balance.',
-        402
-      );
+    return `data:${generatedImage.inlineData.mimeType || 'image/png'};base64,${generatedImage.inlineData.data}`;
+  } catch (error) {
+    if (error instanceof LifestyleMockupError) throw error;
+    const status = Number((error as { status?: number })?.status);
+    if (status === 401 || status === 403) {
+      throw new LifestyleMockupError('Gemini rejected the API key. Check GEMINI_API_KEY.', 401);
     }
-    if (response.status === 429) {
-      throw new LifestyleMockupError(
-        'Pollinations rate limit reached. Please wait before trying again.',
-        429
-      );
+    if (status === 429) {
+      throw new LifestyleMockupError('Gemini API quota is unavailable. Check your Google AI quota or try again later.', 429);
     }
-    throw new LifestyleMockupError(providerMessage || 'Pollinations image editing failed.', 502);
+    console.error('Gemini lifestyle image generation failed:', error);
+    throw new LifestyleMockupError('Gemini could not generate the lifestyle image. Check server logs for details.', 502);
   }
-
-  const generatedImage = result?.data?.[0];
-  if (!generatedImage?.b64_json) {
-    throw new LifestyleMockupError('Pollinations returned no generated image data.', 502);
-  }
-
-  return `data:${generatedImage.media_type || 'image/png'};base64,${generatedImage.b64_json}`;
 }

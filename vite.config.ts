@@ -8,19 +8,21 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     build: {
       rollupOptions: {
         input: {
-          launcher: path.resolve(__dirname, 'index.html'),
-          designStudio: path.resolve(__dirname, 'design-studio/index.html'),
-          mockupStudio: path.resolve(__dirname, 'mockup-studio/index.html'),
+          launcher: path.resolve(import.meta.dirname, 'index.html'),
+          designStudio: path.resolve(import.meta.dirname, 'design-studio/index.html'),
+          mockupStudio: path.resolve(import.meta.dirname, 'mockup-studio/index.html'),
         },
       },
     },
     server: {
+      host: '0.0.0.0',
+      port: 3000,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
